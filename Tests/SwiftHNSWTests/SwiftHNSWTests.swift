@@ -103,6 +103,47 @@ struct SwiftHNSWTests {
         #expect(Bool(true))
     }
 
+    @Test("Replace deleted slot reuses element count")
+    func testReplaceDeleted() throws {
+        let config = HNSWConfiguration(allowReplaceDeleted: true)
+        let index = try HNSWIndex<Float>(
+            dimensions: 4,
+            maxElements: 10,
+            metric: .l2,
+            configuration: config
+        )
+
+        try index.add([1.0, 0.0, 0.0, 0.0], label: 0)
+        #expect(index.count == 1)
+
+        try index.markDeleted(label: 0)
+        #expect(index.contains(label: 0) == false)
+
+        try index.add([0.0, 1.0, 0.0, 0.0], label: 1, replaceDeleted: true)
+        #expect(index.count == 1)
+
+        let results = try index.search([0.0, 1.0, 0.0, 0.0], k: 1)
+        #expect(results.count == 1)
+        #expect(results[0].label == 1)
+        #expect(results[0].distance < 0.01)
+    }
+
+    @Test("Replace deleted without allowReplaceDeleted throws")
+    func testReplaceDeletedNotEnabled() throws {
+        let index = try HNSWIndex<Float>(
+            dimensions: 4,
+            maxElements: 10,
+            metric: .l2
+        )
+
+        try index.add([1.0, 0.0, 0.0, 0.0], label: 0)
+        try index.markDeleted(label: 0)
+
+        #expect(throws: HNSWError.replaceDeletedNotEnabled) {
+            try index.add([0.0, 1.0, 0.0, 0.0], label: 1, replaceDeleted: true)
+        }
+    }
+
     @Test("Large scale test")
     func testLargeScale() throws {
         let dimensions = 128

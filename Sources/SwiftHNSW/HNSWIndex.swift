@@ -16,6 +16,9 @@ public final class HNSWIndex<Scalar: HNSWScalar>: @unchecked Sendable {
     /// Index configuration
     public let configuration: HNSWConfiguration
 
+    /// Whether deleted element slots may be reused on insert
+    public let allowReplaceDeleted: Bool
+
     private let space: HNSWSpaceHandle
     private let index: HNSWIndexHandle
     private let lock = RWLock()
@@ -37,6 +40,7 @@ public final class HNSWIndex<Scalar: HNSWScalar>: @unchecked Sendable {
         self.dimensions = dimensions
         self.metric = metric
         self.configuration = configuration
+        self.allowReplaceDeleted = configuration.allowReplaceDeleted
 
         guard let space = metric.createSpace(dimensions: dimensions, scalar: Scalar.self) else {
             throw HNSWError.initializationFailed("Failed to create distance space")
@@ -69,6 +73,7 @@ public final class HNSWIndex<Scalar: HNSWScalar>: @unchecked Sendable {
         self.dimensions = dimensions
         self.metric = metric
         self.configuration = configuration
+        self.allowReplaceDeleted = configuration.allowReplaceDeleted
         self.space = space
         self.index = index
     }
@@ -126,7 +131,9 @@ extension HNSWIndex {
     /// - Parameters:
     ///   - vector: The vector to add
     ///   - label: Unique identifier for this vector
-    public func add(_ vector: [Scalar], label: UInt64) throws {
+    ///   - replaceDeleted: Reuse a previously deleted slot instead of growing the index
+    public func add(_ vector: [Scalar], label: UInt64, replaceDeleted: Bool = false) throws {
+        try requireReplaceDeletedAllowed(replaceDeleted)
         try validateDimensions(vector.count)
 
         let processedVector = metric.requiresNormalization
@@ -135,7 +142,7 @@ extension HNSWIndex {
 
         try lock.withWriteLock {
             let success = processedVector.withUnsafeBufferPointer { buffer in
-                Scalar.addPoint(index, data: buffer.baseAddress!, label: label)
+                Scalar.addPoint(index, data: buffer.baseAddress!, label: label, replaceDeleted: replaceDeleted)
             }
             guard success else {
                 throw HNSWError.addPointFailed("Failed to add point with label \(label)")
@@ -208,9 +215,11 @@ extension HNSWIndex {
     /// - Parameters:
     ///   - vectors: Flattened array of vectors
     ///   - labels: Labels for each vector
+    ///   - replaceDeleted: Reuse previously deleted slots instead of growing the index
     /// - Returns: Number of successfully added points
     @discardableResult
-    public func addBatch(_ vectors: [Scalar], labels: [UInt64]) throws -> Int {
+    public func addBatch(_ vectors: [Scalar], labels: [UInt64], replaceDeleted: Bool = false) throws -> Int {
+        try requireReplaceDeletedAllowed(replaceDeleted)
         let numVectors = labels.count
         try validateDimensions(vectors.count, expectedTotal: numVectors * dimensions)
 
@@ -226,7 +235,8 @@ extension HNSWIndex {
                         data: vectorsBuffer.baseAddress!,
                         labels: labelsBuffer.baseAddress!,
                         numPoints: numVectors,
-                        dimension: dimensions
+                        dimension: dimensions,
+                        replaceDeleted: replaceDeleted
                     )
                 }
             })
@@ -237,9 +247,10 @@ extension HNSWIndex {
     /// - Parameters:
     ///   - vectors: Array of vectors
     ///   - startingLabel: Starting label (default: current count)
+    ///   - replaceDeleted: Reuse previously deleted slots instead of growing the index
     /// - Returns: Number of successfully added points
     @discardableResult
-    public func addBatch(_ vectors: [[Scalar]], startingLabel: UInt64? = nil) throws -> Int {
+    public func addBatch(_ vectors: [[Scalar]], startingLabel: UInt64? = nil, replaceDeleted: Bool = false) throws -> Int {
         guard !vectors.isEmpty else { return 0 }
         guard vectors.allSatisfy({ $0.count == dimensions }) else {
             throw HNSWError.dimensionMismatch(expected: dimensions, got: vectors.first?.count ?? 0)
@@ -249,7 +260,7 @@ extension HNSWIndex {
         let labels = (0..<vectors.count).map { start + UInt64($0) }
         let flattened = vectors.flatMap { $0 }
 
-        return try addBatch(flattened, labels: labels)
+        return try addBatch(flattened, labels: labels, replaceDeleted: replaceDeleted)
     }
 
     /// Search for k nearest neighbors for multiple queries
@@ -397,6 +408,13 @@ extension HNSWIndex {
     private func validateDimensions(_ got: Int, expectedTotal: Int) throws {
         guard got == expectedTotal else {
             throw HNSWError.dimensionMismatch(expected: expectedTotal, got: got)
+        }
+    }
+
+    @inline(__always)
+    private func requireReplaceDeletedAllowed(_ replaceDeleted: Bool) throws {
+        if replaceDeleted && !allowReplaceDeleted {
+            throw HNSWError.replaceDeletedNotEnabled
         }
     }
 }

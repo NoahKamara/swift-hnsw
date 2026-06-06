@@ -61,11 +61,11 @@ void hnsw_destroy_index(HNSWIndexHandle index) {
 }
 
 // Index operations
-bool hnsw_add_point(HNSWIndexHandle index, const float* data, uint64_t label) {
+bool hnsw_add_point(HNSWIndexHandle index, const float* data, uint64_t label, bool replace_deleted) {
     if (!index || !data) return false;
     try {
         auto* idx = static_cast<HierarchicalNSW<float>*>(index);
-        idx->addPoint(data, static_cast<labeltype>(label), false);
+        idx->addPoint(data, static_cast<labeltype>(label), replace_deleted);
         return true;
     } catch (...) {
         return false;
@@ -142,7 +142,8 @@ int32_t hnsw_add_points_batch(
     const float* data,
     const uint64_t* labels,
     size_t num_points,
-    size_t dimension
+    size_t dimension,
+    bool replace_deleted
 ) {
     if (!index || !data || !labels || num_points == 0) return 0;
     try {
@@ -150,7 +151,7 @@ int32_t hnsw_add_points_batch(
         int32_t added = 0;
         for (size_t i = 0; i < num_points; i++) {
             try {
-                idx->addPoint(data + i * dimension, static_cast<labeltype>(labels[i]), false);
+                idx->addPoint(data + i * dimension, static_cast<labeltype>(labels[i]), replace_deleted);
                 added++;
             } catch (...) {
                 // Skip failed points but continue
@@ -535,13 +536,13 @@ HNSWSpaceHandle hnsw_create_ip_space_f16(size_t dim) {
     }
 }
 
-bool hnsw_add_point_f16(HNSWIndexHandle index, const uint16_t* data, uint64_t label) {
+bool hnsw_add_point_f16(HNSWIndexHandle index, const uint16_t* data, uint64_t label, bool replace_deleted) {
     if (!index || !data) return false;
     try {
         auto* idx = static_cast<HierarchicalNSW<float>*>(index);
         // Data is already in Float16 format (uint16_t binary representation)
         // The distance function will handle it correctly
-        idx->addPoint(data, static_cast<labeltype>(label), false);
+        idx->addPoint(data, static_cast<labeltype>(label), replace_deleted);
         return true;
     } catch (...) {
         return false;
@@ -586,7 +587,8 @@ int32_t hnsw_add_points_batch_f16(
     const uint16_t* data,
     const uint64_t* labels,
     size_t num_points,
-    size_t dimension
+    size_t dimension,
+    bool replace_deleted
 ) {
     if (!index || !data || !labels || num_points == 0) return 0;
     try {
@@ -594,7 +596,7 @@ int32_t hnsw_add_points_batch_f16(
         int32_t added = 0;
         for (size_t i = 0; i < num_points; i++) {
             try {
-                idx->addPoint(data + i * dimension, static_cast<labeltype>(labels[i]), false);
+                idx->addPoint(data + i * dimension, static_cast<labeltype>(labels[i]), replace_deleted);
                 added++;
             } catch (...) {
                 // Skip failed points but continue

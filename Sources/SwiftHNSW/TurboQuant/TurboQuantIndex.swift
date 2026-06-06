@@ -18,6 +18,7 @@ public final class TurboQuantIndex: @unchecked Sendable {
     public let dimensions: Int
     public let bitWidth: Int
     public let configuration: HNSWConfiguration
+    public let allowReplaceDeleted: Bool
     public let seed: UInt64
 
     /// Padded dimension (next power of 2). All internal operations use this.
@@ -49,6 +50,7 @@ public final class TurboQuantIndex: @unchecked Sendable {
         self.dimensions = dimensions
         self.bitWidth = bitWidth
         self.configuration = configuration
+        self.allowReplaceDeleted = configuration.allowReplaceDeleted
         self.seed = seed
 
         // Codebook scaled by 1/√p (per-coordinate variance = 1/p after HD³)
@@ -120,7 +122,8 @@ public final class TurboQuantIndex: @unchecked Sendable {
 
     /// Add a vector. Must be called BEFORE searching.
     /// Internally: normalize → HD³ rotate to p dims → store as Float32[p].
-    public func add(_ vector: [Float], label: UInt64) throws {
+    public func add(_ vector: [Float], label: UInt64, replaceDeleted: Bool = false) throws {
+        try requireReplaceDeletedAllowed(replaceDeleted)
         guard vector.count == dimensions else {
             throw HNSWError.dimensionMismatch(expected: dimensions, got: vector.count)
         }
@@ -138,11 +141,17 @@ public final class TurboQuantIndex: @unchecked Sendable {
                 throw HNSWError.addPointFailed("Cannot add after finalize()")
             }
             let success = rotated.withUnsafeBufferPointer { buf in
-                hnsw_add_point(index, buf.baseAddress!, label)
+                hnsw_add_point(index, buf.baseAddress!, label, replaceDeleted)
             }
             guard success else {
                 throw HNSWError.addPointFailed("Failed to add point with label \(label)")
             }
+        }
+    }
+
+    private func requireReplaceDeletedAllowed(_ replaceDeleted: Bool) throws {
+        if replaceDeleted && !allowReplaceDeleted {
+            throw HNSWError.replaceDeletedNotEnabled
         }
     }
 
@@ -350,6 +359,7 @@ public final class TurboQuantIndex: @unchecked Sendable {
         self.index = index
         self.encoder = encoder
         self.configuration = configuration
+        self.allowReplaceDeleted = configuration.allowReplaceDeleted
         self._finalized = finalized
         self.lock = RWLock()
     }

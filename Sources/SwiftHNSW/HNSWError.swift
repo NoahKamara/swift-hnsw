@@ -11,6 +11,7 @@ public enum HNSWError: Error, Sendable {
     case loadFailed(String)
     case serializationFailed(String)
     case capacityExceeded(current: Int, maximum: Int)
+    case replaceDeletedNotEnabled
 }
 
 extension HNSWError: LocalizedError {
@@ -34,6 +35,8 @@ extension HNSWError: LocalizedError {
             return "Serialization failed: \(message)"
         case .capacityExceeded(let current, let maximum):
             return "Capacity exceeded: \(current) elements, maximum \(maximum)"
+        case .replaceDeletedNotEnabled:
+            return "Replacement of deleted elements is not enabled for this index"
         }
     }
 }
@@ -59,6 +62,8 @@ extension HNSWError: Equatable {
             return a == b
         case (.capacityExceeded(let c1, let m1), .capacityExceeded(let c2, let m2)):
             return c1 == c2 && m1 == m2
+        case (.replaceDeletedNotEnabled, .replaceDeletedNotEnabled):
+            return true
         default:
             return false
         }

@@ -31,7 +31,7 @@ HNSWIndexHandle hnsw_create_index(
 void hnsw_destroy_index(HNSWIndexHandle index);
 
 // Index operations
-bool hnsw_add_point(HNSWIndexHandle index, const float* data, uint64_t label);
+bool hnsw_add_point(HNSWIndexHandle index, const float* data, uint64_t label, bool replace_deleted);
 int32_t hnsw_search_knn(
     HNSWIndexHandle index,
     const float* query,
@@ -46,7 +46,8 @@ int32_t hnsw_add_points_batch(
     const float* data,
     const uint64_t* labels,
     size_t num_points,
-    size_t dimension
+    size_t dimension,
+    bool replace_deleted
 );
 
 int32_t hnsw_search_knn_batch(
@@ -111,7 +112,7 @@ HNSWSpaceHandle hnsw_create_l2_space_f16(size_t dim);
 HNSWSpaceHandle hnsw_create_ip_space_f16(size_t dim);
 
 // Float16 Index operations (data as uint16_t* for Float16 binary representation)
-bool hnsw_add_point_f16(HNSWIndexHandle index, const uint16_t* data, uint64_t label);
+bool hnsw_add_point_f16(HNSWIndexHandle index, const uint16_t* data, uint64_t label, bool replace_deleted);
 int32_t hnsw_search_knn_f16(
     HNSWIndexHandle index,
     const uint16_t* query,
@@ -126,7 +127,8 @@ int32_t hnsw_add_points_batch_f16(
     const uint16_t* data,
     const uint64_t* labels,
     size_t num_points,
-    size_t dimension
+    size_t dimension,
+    bool replace_deleted
 );
 
 int32_t hnsw_search_knn_batch_f16(

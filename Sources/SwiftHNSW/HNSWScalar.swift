@@ -13,7 +13,8 @@ public protocol HNSWScalar: BinaryFloatingPoint, Sendable {
     static func addPoint(
         _ index: HNSWIndexHandle,
         data: UnsafePointer<Self>,
-        label: UInt64
+        label: UInt64,
+        replaceDeleted: Bool
     ) -> Bool
 
     /// Search k nearest neighbors
@@ -31,7 +32,8 @@ public protocol HNSWScalar: BinaryFloatingPoint, Sendable {
         data: UnsafePointer<Self>,
         labels: UnsafePointer<UInt64>,
         numPoints: Int,
-        dimension: Int
+        dimension: Int,
+        replaceDeleted: Bool
     ) -> Int32
 
     /// Search k nearest neighbors in batch
@@ -68,9 +70,10 @@ extension Float: HNSWScalar {
     public static func addPoint(
         _ index: HNSWIndexHandle,
         data: UnsafePointer<Float>,
-        label: UInt64
+        label: UInt64,
+        replaceDeleted: Bool
     ) -> Bool {
-        hnsw_add_point(index, data, label)
+        hnsw_add_point(index, data, label, replaceDeleted)
     }
 
     public static func searchKnn(
@@ -88,9 +91,10 @@ extension Float: HNSWScalar {
         data: UnsafePointer<Float>,
         labels: UnsafePointer<UInt64>,
         numPoints: Int,
-        dimension: Int
+        dimension: Int,
+        replaceDeleted: Bool
     ) -> Int32 {
-        hnsw_add_points_batch(index, data, labels, numPoints, dimension)
+        hnsw_add_points_batch(index, data, labels, numPoints, dimension, replaceDeleted)
     }
 
     public static func searchKnnBatch(
@@ -129,10 +133,11 @@ extension Float16: HNSWScalar {
     public static func addPoint(
         _ index: HNSWIndexHandle,
         data: UnsafePointer<Float16>,
-        label: UInt64
+        label: UInt64,
+        replaceDeleted: Bool
     ) -> Bool {
         data.withMemoryRebound(to: UInt16.self, capacity: 1) { ptr in
-            hnsw_add_point_f16(index, ptr, label)
+            hnsw_add_point_f16(index, ptr, label, replaceDeleted)
         }
     }
 
@@ -153,10 +158,11 @@ extension Float16: HNSWScalar {
         data: UnsafePointer<Float16>,
         labels: UnsafePointer<UInt64>,
         numPoints: Int,
-        dimension: Int
+        dimension: Int,
+        replaceDeleted: Bool
     ) -> Int32 {
         data.withMemoryRebound(to: UInt16.self, capacity: numPoints * dimension) { ptr in
-            hnsw_add_points_batch_f16(index, ptr, labels, numPoints, dimension)
+            hnsw_add_points_batch_f16(index, ptr, labels, numPoints, dimension, replaceDeleted)
         }
     }
 
