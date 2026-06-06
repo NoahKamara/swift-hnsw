@@ -282,11 +282,10 @@ struct TurboQuantIndexTests {
             dimensions: dim, maxElements: n, bitWidth: 4,
             configuration: HNSWConfiguration(m: 16, efConstruction: 200), seed: 42)
         for (i, v) in trainVectors.enumerated() { try index.add(v, label: UInt64(i)) }
-        index.setEfSearch(200)
 
         var totalRecall: Double = 0
         for qi in 0..<numQueries {
-            let results = try index.search(testQueries[qi], k: k)
+            let results = try index.search(testQueries[qi], k: k, ef: 200)
             let found = Set(results.prefix(k).map { $0.label })
             let truth = Set(groundTruths[qi].prefix(k))
             totalRecall += Double(found.intersection(truth).count) / Double(k)
@@ -311,11 +310,10 @@ struct TurboQuantIndexTests {
             dimensions: dim, maxElements: n, bitWidth: 4,
             configuration: HNSWConfiguration(m: 16, efConstruction: 200), seed: 42)
         for (i, v) in trainVectors.enumerated() { try index.add(v, label: UInt64(i)) }
-        index.setEfSearch(200)
 
         var totalRecall: Double = 0
         for qi in 0..<numQueries {
-            let results = try index.search(testQueries[qi], k: k)
+            let results = try index.search(testQueries[qi], k: k, ef: 200)
             let found = Set(results.prefix(k).map { $0.label })
             let truth = Set(groundTruths[qi].prefix(k))
             totalRecall += Double(found.intersection(truth).count) / Double(k)
@@ -406,23 +404,18 @@ struct TurboQuantIndexTests {
         for i in 0..<n {
             try index.add((0..<dim).map { _ in Float.random(in: -1...1) }, label: UInt64(i))
         }
-        index.setEfSearch(efSearch)
 
         let query = (0..<dim).map { _ in Float.random(in: -1...1) }
-        let resultsBefore = try index.search(query, k: k)
+        let resultsBefore = try index.search(query, k: k, ef: efSearch)
 
         let tmpPath = NSTemporaryDirectory() + "tq_ef_\(UUID().uuidString).bin"
         try index.save(to: tmpPath)
         defer { try? FileManager.default.removeItem(atPath: tmpPath) }
 
         let loaded = try TurboQuantIndex.load(from: tmpPath)
-        // Explicitly set the same efSearch on loaded index
-        // (this test verifies that the header preserves it OR that the user must set it)
-        loaded.setEfSearch(efSearch)
-
-        let resultsAfter = try loaded.search(query, k: k)
+        let resultsAfter = try loaded.search(query, k: k, ef: efSearch)
         #expect(resultsBefore.map { $0.label } == resultsAfter.map { $0.label },
-               "Loaded index with same efSearch should produce identical results")
+               "Loaded index with same per-query ef should produce identical results")
     }
 
     // MARK: - Issue #6: Header serialization must be portable

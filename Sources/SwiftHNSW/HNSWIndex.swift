@@ -154,13 +154,15 @@ extension HNSWIndex {
     /// - Parameters:
     ///   - query: The query vector
     ///   - k: Number of nearest neighbors to find
+    ///   - ef: Candidate list size for this query (defaults to `configuration.efSearch`)
     /// - Returns: Array of search results sorted by distance (closest first)
-    public func search(_ query: [Scalar], k: Int) throws -> [SearchResult] {
+    public func search(_ query: [Scalar], k: Int, ef: Int? = nil) throws -> [SearchResult] {
         try validateDimensions(query.count)
 
         let processedQuery = metric.requiresNormalization
             ? normalizeVector(query)
             : query
+        let efSearch = ef ?? configuration.efSearch
 
         return lock.withReadLock {
             var labels = [UInt64](repeating: 0, count: k)
@@ -173,6 +175,7 @@ extension HNSWIndex {
                             index,
                             query: queryBuffer.baseAddress!,
                             k: Int32(k),
+                            ef: Int32(efSearch),
                             labels: labelsBuffer.baseAddress!,
                             distances: distancesBuffer.baseAddress!
                         )
@@ -268,13 +271,15 @@ extension HNSWIndex {
     ///   - queries: Flattened array of query vectors
     ///   - numQueries: Number of queries
     ///   - k: Number of nearest neighbors per query
+    ///   - ef: Candidate list size for each query (defaults to `configuration.efSearch`)
     /// - Returns: Array of search results for each query
-    public func searchBatch(_ queries: [Scalar], numQueries: Int, k: Int) throws -> [[SearchResult]] {
+    public func searchBatch(_ queries: [Scalar], numQueries: Int, k: Int, ef: Int? = nil) throws -> [[SearchResult]] {
         try validateDimensions(queries.count, expectedTotal: numQueries * dimensions)
 
         let processedQueries = metric.requiresNormalization
             ? normalizeVectorsBatch(queries, count: numQueries, dimensions: dimensions)
             : queries
+        let efSearch = ef ?? configuration.efSearch
 
         return lock.withReadLock {
             var labels = [UInt64](repeating: 0, count: numQueries * k)
@@ -289,6 +294,7 @@ extension HNSWIndex {
                             numQueries: numQueries,
                             dimension: dimensions,
                             k: Int32(k),
+                            ef: Int32(efSearch),
                             labels: labelsBuffer.baseAddress!,
                             distances: distancesBuffer.baseAddress!
                         )
@@ -313,15 +319,16 @@ extension HNSWIndex {
     /// - Parameters:
     ///   - queries: Array of query vectors
     ///   - k: Number of nearest neighbors per query
+    ///   - ef: Candidate list size for each query (defaults to `configuration.efSearch`)
     /// - Returns: Array of search results for each query
-    public func searchBatch(_ queries: [[Scalar]], k: Int) throws -> [[SearchResult]] {
+    public func searchBatch(_ queries: [[Scalar]], k: Int, ef: Int? = nil) throws -> [[SearchResult]] {
         guard !queries.isEmpty else { return [] }
         guard queries.allSatisfy({ $0.count == dimensions }) else {
             throw HNSWError.dimensionMismatch(expected: dimensions, got: queries.first?.count ?? 0)
         }
 
         let flattened = queries.flatMap { $0 }
-        return try searchBatch(flattened, numQueries: queries.count, k: k)
+        return try searchBatch(flattened, numQueries: queries.count, k: k, ef: ef)
     }
 }
 

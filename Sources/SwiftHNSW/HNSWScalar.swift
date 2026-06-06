@@ -22,6 +22,7 @@ public protocol HNSWScalar: BinaryFloatingPoint, Sendable {
         _ index: HNSWIndexHandle,
         query: UnsafePointer<Self>,
         k: Int32,
+        ef: Int32,
         labels: UnsafeMutablePointer<UInt64>,
         distances: UnsafeMutablePointer<Float>
     ) -> Int32
@@ -43,6 +44,7 @@ public protocol HNSWScalar: BinaryFloatingPoint, Sendable {
         numQueries: Int,
         dimension: Int,
         k: Int32,
+        ef: Int32,
         labels: UnsafeMutablePointer<UInt64>,
         distances: UnsafeMutablePointer<Float>
     ) -> Int32
@@ -80,10 +82,11 @@ extension Float: HNSWScalar {
         _ index: HNSWIndexHandle,
         query: UnsafePointer<Float>,
         k: Int32,
+        ef: Int32,
         labels: UnsafeMutablePointer<UInt64>,
         distances: UnsafeMutablePointer<Float>
     ) -> Int32 {
-        hnsw_search_knn(index, query, k, labels, distances)
+        hnsw_search_knn(index, query, k, ef, labels, distances)
     }
 
     public static func addPointsBatch(
@@ -103,10 +106,11 @@ extension Float: HNSWScalar {
         numQueries: Int,
         dimension: Int,
         k: Int32,
+        ef: Int32,
         labels: UnsafeMutablePointer<UInt64>,
         distances: UnsafeMutablePointer<Float>
     ) -> Int32 {
-        hnsw_search_knn_batch(index, queries, numQueries, dimension, k, labels, distances)
+        hnsw_search_knn_batch(index, queries, numQueries, dimension, k, ef, labels, distances)
     }
 
     public static func getVector(
@@ -145,11 +149,12 @@ extension Float16: HNSWScalar {
         _ index: HNSWIndexHandle,
         query: UnsafePointer<Float16>,
         k: Int32,
+        ef: Int32,
         labels: UnsafeMutablePointer<UInt64>,
         distances: UnsafeMutablePointer<Float>
     ) -> Int32 {
         query.withMemoryRebound(to: UInt16.self, capacity: 1) { ptr in
-            hnsw_search_knn_f16(index, ptr, k, labels, distances)
+            hnsw_search_knn_f16(index, ptr, k, ef, labels, distances)
         }
     }
 
@@ -172,11 +177,12 @@ extension Float16: HNSWScalar {
         numQueries: Int,
         dimension: Int,
         k: Int32,
+        ef: Int32,
         labels: UnsafeMutablePointer<UInt64>,
         distances: UnsafeMutablePointer<Float>
     ) -> Int32 {
         queries.withMemoryRebound(to: UInt16.self, capacity: numQueries * dimension) { ptr in
-            hnsw_search_knn_batch_f16(index, ptr, numQueries, dimension, k, labels, distances)
+            hnsw_search_knn_batch_f16(index, ptr, numQueries, dimension, k, ef, labels, distances)
         }
     }
 

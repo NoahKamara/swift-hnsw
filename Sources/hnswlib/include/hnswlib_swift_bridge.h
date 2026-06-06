@@ -36,6 +36,7 @@ int32_t hnsw_search_knn(
     HNSWIndexHandle index,
     const float* query,
     int32_t k,
+    int32_t ef,
     uint64_t* labels,
     float* distances
 );
@@ -56,6 +57,7 @@ int32_t hnsw_search_knn_batch(
     size_t num_queries,
     size_t dimension,
     int32_t k,
+    int32_t ef,
     uint64_t* labels,
     float* distances
 );
@@ -117,6 +119,7 @@ int32_t hnsw_search_knn_f16(
     HNSWIndexHandle index,
     const uint16_t* query,
     int32_t k,
+    int32_t ef,
     uint64_t* labels,
     float* distances
 );
@@ -137,6 +140,7 @@ int32_t hnsw_search_knn_batch_f16(
     size_t num_queries,
     size_t dimension,
     int32_t k,
+    int32_t ef,
     uint64_t* labels,
     float* distances
 );

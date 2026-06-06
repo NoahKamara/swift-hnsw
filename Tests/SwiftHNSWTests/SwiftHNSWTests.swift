@@ -103,6 +103,41 @@ struct SwiftHNSWTests {
         #expect(Bool(true))
     }
 
+    @Test("Per-query ef improves recall")
+    func testPerQueryEf() throws {
+        let dimensions = 32
+        let numElements = 500
+        let k = 10
+        let vectors = (0..<numElements).map { _ in
+            (0..<dimensions).map { _ in Float.random(in: -1...1) }
+        }
+
+        let index = try HNSWIndex<Float>(
+            dimensions: dimensions,
+            maxElements: numElements,
+            metric: .l2,
+            configuration: HNSWConfiguration(m: 16, efConstruction: 200, efSearch: 10)
+        )
+
+        for (i, vector) in vectors.enumerated() {
+            try index.add(vector, label: UInt64(i))
+        }
+
+        let queries = (0..<20).map { _ in
+            (0..<dimensions).map { _ in Float.random(in: -1...1) }
+        }
+        let groundTruths = queries.map { bruteForceSearch(query: $0, vectors: vectors, k: k) }
+
+        let lowEfResults = try queries.map { try index.search($0, k: k, ef: 10) }
+        let highEfResults = try queries.map { try index.search($0, k: k, ef: 200) }
+
+        let lowRecall = calculateAverageRecall(results: lowEfResults, groundTruths: groundTruths, k: k)
+        let highRecall = calculateAverageRecall(results: highEfResults, groundTruths: groundTruths, k: k)
+
+        #expect(highRecall >= lowRecall)
+        #expect(highRecall > lowRecall || highRecall >= 0.9)
+    }
+
     @Test("Replace deleted slot reuses element count")
     func testReplaceDeleted() throws {
         let config = HNSWConfiguration(allowReplaceDeleted: true)

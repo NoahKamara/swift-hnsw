@@ -158,7 +158,11 @@ public final class TurboQuantIndex: @unchecked Sendable {
     // MARK: - Search
 
     /// Search for k nearest neighbors. Auto-finalizes on first call.
-    public func search(_ query: [Float], k: Int) throws -> [SearchResult] {
+    /// - Parameters:
+    ///   - query: The query vector
+    ///   - k: Number of nearest neighbors to find
+    ///   - ef: Candidate list size for this query (defaults to `configuration.efSearch`)
+    public func search(_ query: [Float], k: Int, ef: Int? = nil) throws -> [SearchResult] {
         guard query.count == dimensions else {
             throw HNSWError.dimensionMismatch(expected: dimensions, got: query.count)
         }
@@ -185,6 +189,8 @@ public final class TurboQuantIndex: @unchecked Sendable {
             }
         }
 
+        let efSearch = ef ?? configuration.efSearch
+
         // Search under read lock (concurrent reads OK)
         return lock.withReadLock {
             var labels = [UInt64](repeating: 0, count: k)
@@ -193,7 +199,7 @@ public final class TurboQuantIndex: @unchecked Sendable {
             let resultCount = rotated.withUnsafeBufferPointer { queryBuf in
                 labels.withUnsafeMutableBufferPointer { labelsBuf in
                     distances.withUnsafeMutableBufferPointer { distBuf in
-                        hnsw_search_knn(index, queryBuf.baseAddress!, Int32(k),
+                        hnsw_search_knn(index, queryBuf.baseAddress!, Int32(k), Int32(efSearch),
                                         labelsBuf.baseAddress!, distBuf.baseAddress!)
                     }
                 }

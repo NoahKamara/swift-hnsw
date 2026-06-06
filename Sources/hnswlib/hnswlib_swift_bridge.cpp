@@ -76,30 +76,25 @@ int32_t hnsw_search_knn(
     HNSWIndexHandle index,
     const float* query,
     int32_t k,
+    int32_t ef,
     uint64_t* labels,
     float* distances
 ) {
     if (!index || !query || !labels || !distances) return 0;
     try {
         auto* idx = static_cast<HierarchicalNSW<float>*>(index);
-        auto result = idx->searchKnn(query, static_cast<size_t>(k), nullptr);
+        auto result = idx->searchKnn(query, static_cast<size_t>(k), static_cast<size_t>(ef));
 
-        int32_t count = 0;
-        while (!result.empty()) {
+        int32_t writeIdx = k - 1;
+        while (!result.empty() && writeIdx >= 0) {
             auto& top = result.top();
-            labels[count] = static_cast<uint64_t>(top.second);
-            distances[count] = top.first;
+            labels[writeIdx] = static_cast<uint64_t>(top.second);
+            distances[writeIdx] = top.first;
             result.pop();
-            count++;
+            writeIdx--;
         }
 
-        // Results are in reverse order (furthest first), so reverse them
-        for (int32_t i = 0; i < count / 2; i++) {
-            std::swap(labels[i], labels[count - 1 - i]);
-            std::swap(distances[i], distances[count - 1 - i]);
-        }
-
-        return count;
+        return k - writeIdx - 1;
     } catch (...) {
         return 0;
     }
@@ -169,6 +164,7 @@ int32_t hnsw_search_knn_batch(
     size_t num_queries,
     size_t dimension,
     int32_t k,
+    int32_t ef,
     uint64_t* labels,
     float* distances
 ) {
@@ -182,24 +178,18 @@ int32_t hnsw_search_knn_batch(
             uint64_t* result_labels = labels + q * k;
             float* result_distances = distances + q * k;
 
-            auto result = idx->searchKnn(query, static_cast<size_t>(k), nullptr);
+            auto result = idx->searchKnn(query, static_cast<size_t>(k), static_cast<size_t>(ef));
 
-            int32_t count = 0;
-            while (!result.empty() && count < k) {
+            int32_t writeIdx = k - 1;
+            while (!result.empty() && writeIdx >= 0) {
                 auto& top = result.top();
-                result_labels[count] = static_cast<uint64_t>(top.second);
-                result_distances[count] = top.first;
+                result_labels[writeIdx] = static_cast<uint64_t>(top.second);
+                result_distances[writeIdx] = top.first;
                 result.pop();
-                count++;
+                writeIdx--;
             }
 
-            // Results are in reverse order (furthest first), so reverse them
-            for (int32_t i = 0; i < count / 2; i++) {
-                std::swap(result_labels[i], result_labels[count - 1 - i]);
-                std::swap(result_distances[i], result_distances[count - 1 - i]);
-            }
-
-            total_results += count;
+            total_results += k - writeIdx - 1;
         }
 
         return total_results;
@@ -553,30 +543,25 @@ int32_t hnsw_search_knn_f16(
     HNSWIndexHandle index,
     const uint16_t* query,
     int32_t k,
+    int32_t ef,
     uint64_t* labels,
     float* distances
 ) {
     if (!index || !query || !labels || !distances) return 0;
     try {
         auto* idx = static_cast<HierarchicalNSW<float>*>(index);
-        auto result = idx->searchKnn(query, static_cast<size_t>(k), nullptr);
+        auto result = idx->searchKnn(query, static_cast<size_t>(k), static_cast<size_t>(ef));
 
-        int32_t count = 0;
-        while (!result.empty()) {
+        int32_t writeIdx = k - 1;
+        while (!result.empty() && writeIdx >= 0) {
             auto& top = result.top();
-            labels[count] = static_cast<uint64_t>(top.second);
-            distances[count] = top.first;
+            labels[writeIdx] = static_cast<uint64_t>(top.second);
+            distances[writeIdx] = top.first;
             result.pop();
-            count++;
+            writeIdx--;
         }
 
-        // Results are in reverse order (furthest first), so reverse them
-        for (int32_t i = 0; i < count / 2; i++) {
-            std::swap(labels[i], labels[count - 1 - i]);
-            std::swap(distances[i], distances[count - 1 - i]);
-        }
-
-        return count;
+        return k - writeIdx - 1;
     } catch (...) {
         return 0;
     }
@@ -614,6 +599,7 @@ int32_t hnsw_search_knn_batch_f16(
     size_t num_queries,
     size_t dimension,
     int32_t k,
+    int32_t ef,
     uint64_t* labels,
     float* distances
 ) {
@@ -627,24 +613,18 @@ int32_t hnsw_search_knn_batch_f16(
             uint64_t* result_labels = labels + q * k;
             float* result_distances = distances + q * k;
 
-            auto result = idx->searchKnn(query, static_cast<size_t>(k), nullptr);
+            auto result = idx->searchKnn(query, static_cast<size_t>(k), static_cast<size_t>(ef));
 
-            int32_t count = 0;
-            while (!result.empty() && count < k) {
+            int32_t writeIdx = k - 1;
+            while (!result.empty() && writeIdx >= 0) {
                 auto& top = result.top();
-                result_labels[count] = static_cast<uint64_t>(top.second);
-                result_distances[count] = top.first;
+                result_labels[writeIdx] = static_cast<uint64_t>(top.second);
+                result_distances[writeIdx] = top.first;
                 result.pop();
-                count++;
+                writeIdx--;
             }
 
-            // Results are in reverse order (furthest first), so reverse them
-            for (int32_t i = 0; i < count / 2; i++) {
-                std::swap(result_labels[i], result_labels[count - 1 - i]);
-                std::swap(result_distances[i], result_distances[count - 1 - i]);
-            }
-
-            total_results += count;
+            total_results += k - writeIdx - 1;
         }
 
         return total_results;
