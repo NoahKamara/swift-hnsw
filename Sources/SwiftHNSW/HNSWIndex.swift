@@ -192,9 +192,27 @@ extension HNSWIndex {
     /// Mark an element as deleted
     /// - Parameter label: The label of the element to delete
     public func markDeleted(label: UInt64) throws {
+        try markDeleted(labels: [label])
+    }
+
+    /// Mark multiple elements as deleted in a single native call
+    /// - Parameters:
+    ///   - labels: Labels of the elements to delete
+    ///   - numThreads: Worker thread count (`<= 0` uses the global default or hardware concurrency)
+    public func markDeleted(labels: [UInt64], numThreads: Int? = nil) throws {
+        guard !labels.isEmpty else { return }
+
         try lock.withWriteLock {
-            guard hnsw_mark_deleted(index, label) else {
-                throw HNSWError.deleteFailed("Failed to delete element with label \(label)")
+            let result = labels.withUnsafeBufferPointer { buffer in
+                hnsw_mark_deleted_batch(
+                    index,
+                    buffer.baseAddress!,
+                    Int32(labels.count),
+                    Int32(numThreads ?? 0)
+                )
+            }
+            guard result == 0 else {
+                throw HNSWError.deleteFailed("Failed to batch delete \(labels.count) elements")
             }
         }
     }
@@ -202,9 +220,29 @@ extension HNSWIndex {
     /// Unmark a deleted element
     /// - Parameter label: The label of the element to restore
     public func unmarkDeleted(label: UInt64) throws {
+        try unmarkDeleted(labels: [label])
+    }
+
+    /// Unmark multiple deleted elements in a single native call
+    ///
+    /// - Warning: Unsafe when `allowReplaceDeleted` is enabled and deleted slots may be reused.
+    /// - Parameters:
+    ///   - labels: Labels of the elements to restore
+    ///   - numThreads: Worker thread count (`<= 0` uses the global default or hardware concurrency)
+    public func unmarkDeleted(labels: [UInt64], numThreads: Int? = nil) throws {
+        guard !labels.isEmpty else { return }
+
         try lock.withWriteLock {
-            guard hnsw_unmark_deleted(index, label) else {
-                throw HNSWError.deleteFailed("Failed to undelete element with label \(label)")
+            let result = labels.withUnsafeBufferPointer { buffer in
+                hnsw_unmark_deleted_batch(
+                    index,
+                    buffer.baseAddress!,
+                    Int32(labels.count),
+                    Int32(numThreads ?? 0)
+                )
+            }
+            guard result == 0 else {
+                throw HNSWError.deleteFailed("Failed to batch undelete \(labels.count) elements")
             }
         }
     }

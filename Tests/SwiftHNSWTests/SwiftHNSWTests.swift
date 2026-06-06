@@ -163,6 +163,82 @@ struct SwiftHNSWTests {
         #expect(results[0].distance < 0.01)
     }
 
+    @Test("Batch delete marks all labels and restores on unmark")
+    func testBatchDelete() throws {
+        let numElements = 32
+        let index = try HNSWIndex<Float>(
+            dimensions: 4,
+            maxElements: numElements,
+            metric: .l2
+        )
+
+        for i in 0..<numElements {
+            var vector = [Float](repeating: 0, count: 4)
+            vector[i % 4] = 1.0
+            try index.add(vector, label: UInt64(i))
+        }
+
+        let labels = (0..<numElements).map(UInt64.init)
+        try index.markDeleted(labels: labels)
+
+        for label in labels {
+            #expect(index.contains(label: label) == false)
+        }
+
+        let results = try index.search([1.0, 0.0, 0.0, 0.0], k: numElements)
+        #expect(results.isEmpty)
+
+        try index.unmarkDeleted(labels: labels)
+
+        for label in labels {
+            #expect(index.contains(label: label))
+        }
+
+        let restored = try index.search([1.0, 0.0, 0.0, 0.0], k: numElements)
+        #expect(restored.count == numElements)
+        #expect(Set(restored.map(\.label)) == Set(labels))
+    }
+
+    @Test("Batch delete matches single delete behavior")
+    func testBatchDeleteMatchesSingleDelete() throws {
+        let dimensions = 8
+        let numElements = 16
+        let singleIndex = try HNSWIndex<Float>(
+            dimensions: dimensions,
+            maxElements: numElements,
+            metric: .l2
+        )
+        let batchIndex = try HNSWIndex<Float>(
+            dimensions: dimensions,
+            maxElements: numElements,
+            metric: .l2
+        )
+
+        for i in 0..<numElements {
+            var vector = [Float](repeating: 0, count: dimensions)
+            vector[i % dimensions] = Float(i + 1)
+            try singleIndex.add(vector, label: UInt64(i))
+            try batchIndex.add(vector, label: UInt64(i))
+        }
+
+        let query = [Float](repeating: 0.25, count: dimensions)
+        let labelsToDelete = [UInt64(1), 3, 5, 7]
+
+        for label in labelsToDelete {
+            try singleIndex.markDeleted(label: label)
+        }
+        try batchIndex.markDeleted(labels: labelsToDelete)
+
+        let singleResults = try singleIndex.search(query, k: numElements)
+        let batchResults = try batchIndex.search(query, k: numElements)
+
+        #expect(Set(singleResults.map(\.label)) == Set(batchResults.map(\.label)))
+        for label in labelsToDelete {
+            #expect(singleIndex.contains(label: label) == false)
+            #expect(batchIndex.contains(label: label) == false)
+        }
+    }
+
     @Test("Replace deleted without allowReplaceDeleted throws")
     func testReplaceDeletedNotEnabled() throws {
         let index = try HNSWIndex<Float>(

@@ -1,8 +1,93 @@
 #include "include/hnswlib_swift_bridge.h"
 #include "include/hnswlib.h"
+#include <atomic>
+#include <functional>
 #include <string>
+#include <thread>
+#include <vector>
 
 using namespace hnswlib;
+
+namespace {
+
+int32_t g_num_threads_default = 0;
+
+template <typename Func>
+void ParallelFor(size_t start, size_t end, size_t num_threads, Func&& func) {
+    if (num_threads <= 1 || end <= start) {
+        for (size_t row = start; row < end; row++) {
+            func(row, 0);
+        }
+        return;
+    }
+
+    std::atomic<size_t> next_row{start};
+    std::vector<std::thread> threads;
+    threads.reserve(num_threads);
+
+    for (size_t t = 0; t < num_threads; t++) {
+        threads.emplace_back([&]() {
+            size_t row;
+            while ((row = next_row.fetch_add(1, std::memory_order_relaxed)) < end) {
+                func(row, 0);
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+}
+
+int32_t resolveThreadCount(int32_t num_threads, int32_t count) {
+    int32_t thread_count = num_threads;
+    if (thread_count <= 0) {
+        thread_count = g_num_threads_default;
+        if (thread_count <= 0) {
+            thread_count = static_cast<int32_t>(std::thread::hardware_concurrency());
+        }
+    }
+    if (thread_count <= 0) {
+        thread_count = 1;
+    }
+    if (count <= thread_count * 4) {
+        thread_count = 1;
+    }
+    return thread_count;
+}
+
+int32_t markDeletedBatchImpl(
+    HNSWIndexHandle index,
+    const uint64_t* labels,
+    int32_t count,
+    int32_t num_threads,
+    bool unmark
+) {
+    if (!index || !labels || count <= 0) {
+        return -1;
+    }
+
+    try {
+        auto* idx = static_cast<HierarchicalNSW<float>*>(index);
+        const int32_t thread_count = resolveThreadCount(num_threads, count);
+
+        auto process = [&](size_t row, size_t) {
+            const labeltype label = static_cast<labeltype>(labels[row]);
+            if (unmark) {
+                idx->unmarkDelete(label);
+            } else {
+                idx->markDelete(label);
+            }
+        };
+
+        ParallelFor(0, static_cast<size_t>(count), static_cast<size_t>(thread_count), process);
+        return 0;
+    } catch (...) {
+        return -1;
+    }
+}
+
+} // namespace
 
 extern "C" {
 
@@ -109,6 +194,10 @@ void hnsw_set_ef(HNSWIndexHandle index, size_t ef) {
     }
 }
 
+void hnsw_set_num_threads(int32_t num_threads) {
+    g_num_threads_default = num_threads;
+}
+
 bool hnsw_mark_deleted(HNSWIndexHandle index, uint64_t label) {
     if (!index) return false;
     try {
@@ -129,6 +218,24 @@ bool hnsw_unmark_deleted(HNSWIndexHandle index, uint64_t label) {
     } catch (...) {
         return false;
     }
+}
+
+int32_t hnsw_mark_deleted_batch(
+    HNSWIndexHandle index,
+    const uint64_t* labels,
+    int32_t count,
+    int32_t num_threads
+) {
+    return markDeletedBatchImpl(index, labels, count, num_threads, false);
+}
+
+int32_t hnsw_unmark_deleted_batch(
+    HNSWIndexHandle index,
+    const uint64_t* labels,
+    int32_t count,
+    int32_t num_threads
+) {
+    return markDeletedBatchImpl(index, labels, count, num_threads, true);
 }
 
 // Batch operations for high performance

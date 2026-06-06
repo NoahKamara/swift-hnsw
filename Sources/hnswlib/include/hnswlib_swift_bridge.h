@@ -63,8 +63,21 @@ int32_t hnsw_search_knn_batch(
 );
 
 void hnsw_set_ef(HNSWIndexHandle index, size_t ef);
+void hnsw_set_num_threads(int32_t num_threads);
 bool hnsw_mark_deleted(HNSWIndexHandle index, uint64_t label);
 bool hnsw_unmark_deleted(HNSWIndexHandle index, uint64_t label);
+int32_t hnsw_mark_deleted_batch(
+    HNSWIndexHandle index,
+    const uint64_t* labels,
+    int32_t count,
+    int32_t num_threads
+);
+int32_t hnsw_unmark_deleted_batch(
+    HNSWIndexHandle index,
+    const uint64_t* labels,
+    int32_t count,
+    int32_t num_threads
+);
 
 // Resize index
 bool hnsw_resize_index(HNSWIndexHandle index, size_t new_max_elements);
