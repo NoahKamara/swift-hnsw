@@ -454,3 +454,142 @@ struct Float16Tests {
         #expect(index.count == 1)
     }
 }
+
+@Suite("Allowed-label filtered search")
+struct AllowedLabelFilteredSearchTests {
+    private func buildIndex(
+        count: Int,
+        dimensions: Int = 32
+    ) throws -> HNSWIndex<Float> {
+        let index = try HNSWIndex<Float>(
+            dimensions: dimensions,
+            maxElements: count,
+            metric: .l2,
+            configuration: HNSWConfiguration(m: 16, efConstruction: 200, efSearch: 64)
+        )
+
+        for i in 0..<count {
+            let vector = (0..<dimensions).map { dim in
+                Float(i &+ dim &+ 1) * 0.01
+            }
+            try index.add(vector, label: UInt64(i))
+        }
+
+        return index
+    }
+
+    @Test("Bitset search returns only allowed labels")
+    func testAllowedLabelsOnly() throws {
+        let index = try buildIndex(count: 128)
+        let query = (0..<32).map { Float($0 + 1) * 0.01 }
+        var allowedLabels = HNSWLabelBitset(capacity: index.capacity)
+        for label in stride(from: 0, to: 128, by: 2) {
+            allowedLabels.insert(UInt64(label))
+        }
+
+        let results = try index.search(
+            query,
+            k: 10,
+            allowedLabels: allowedLabels,
+            ef: 256
+        )
+
+        #expect(!results.isEmpty)
+        for result in results {
+            #expect(allowedLabels.contains(result.label))
+            #expect(Int(result.label).isMultiple(of: 2))
+        }
+    }
+
+    @Test("Empty bitset returns no results")
+    func testEmptyBitsetReturnsNoResults() throws {
+        let index = try buildIndex(count: 32)
+        let query = (0..<32).map { Float($0 + 1) * 0.01 }
+        let allowedLabels = HNSWLabelBitset(capacity: index.capacity)
+
+        let results = try index.search(
+            query,
+            k: 10,
+            allowedLabels: allowedLabels,
+            ef: 64
+        )
+
+        #expect(results.isEmpty)
+    }
+
+    @Test("High allowed label within capacity is matched")
+    func testHighAllowedLabelWithinCapacity() throws {
+        let index = try buildIndex(count: 130)
+        let query = (0..<32).map { Float($0 + 1) * 0.01 }
+        var allowedLabels = HNSWLabelBitset(capacity: index.capacity)
+        allowedLabels.insert(129)
+
+        let results = try index.search(
+            query,
+            k: 10,
+            allowedLabels: allowedLabels,
+            ef: 256
+        )
+
+        #expect(results.map(\.label) == [129])
+    }
+
+    @Test("Out-of-range labels are not considered allowed")
+    func testOutOfRangeLabelsAreDisallowed() {
+        var allowedLabels = HNSWLabelBitset(capacity: 4)
+        allowedLabels.insert(3)
+
+        #expect(allowedLabels.contains(3))
+        #expect(!allowedLabels.contains(4))
+        #expect(!allowedLabels.contains(UInt64.max))
+    }
+
+    @Test("Deleted labels are excluded from allowed-label search")
+    func testDeletedLabelsExcluded() throws {
+        let index = try buildIndex(count: 64)
+        let query = (0..<32).map { Float($0 + 1) * 0.01 }
+        let deletedLabel = UInt64(0)
+        var allowedLabels = HNSWLabelBitset(capacity: index.capacity)
+        for label in stride(from: 0, to: 64, by: 2) {
+            allowedLabels.insert(UInt64(label))
+        }
+
+        try index.markDeleted(label: deletedLabel)
+        #expect(index.contains(label: deletedLabel) == false)
+
+        let results = try index.search(
+            query,
+            k: 10,
+            allowedLabels: allowedLabels,
+            ef: 256
+        )
+
+        #expect(!results.contains { $0.label == deletedLabel })
+        for result in results {
+            #expect(allowedLabels.contains(result.label))
+        }
+    }
+
+    @Test("Float16 allowed-label search uses the bitset")
+    func testFloat16AllowedLabelSearch() throws {
+        let index = try HNSWIndex<Float16>(
+            dimensions: 4,
+            maxElements: 8,
+            metric: .l2
+        )
+        try index.add([1.0, 0.0, 0.0, 0.0], label: 0)
+        try index.add([0.0, 1.0, 0.0, 0.0], label: 1)
+
+        var allowedLabels = HNSWLabelBitset(capacity: index.capacity)
+        allowedLabels.insert(1)
+
+        let results = try index.search(
+            [1.0, 0.0, 0.0, 0.0],
+            k: 2,
+            allowedLabels: allowedLabels,
+            ef: 16
+        )
+
+        #expect(results.map(\.label) == [1])
+    }
+}

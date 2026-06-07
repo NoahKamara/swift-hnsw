@@ -189,6 +189,56 @@ extension HNSWIndex {
         }
     }
 
+    /// Search for k nearest neighbors among labels present in `allowedLabels`.
+    ///
+    /// The filter is evaluated entirely in C++ during graph search. Use ``HNSWLabelBitset`` when labels are
+    /// bounded numeric values, typically `0..<maxElements`.
+    ///
+    /// For highly selective filters, increase `ef` so the search explores enough candidates to fill `k` results.
+    public func search(
+        _ query: [Scalar],
+        k: Int,
+        allowedLabels: HNSWLabelBitset,
+        ef: Int? = nil
+    ) throws -> [SearchResult] {
+        try validateDimensions(query.count)
+        guard !allowedLabels.words.isEmpty else { return [] }
+
+        let processedQuery = metric.requiresNormalization
+            ? normalizeVector(query)
+            : query
+        let efSearch = ef ?? configuration.efSearch
+
+        return lock.withReadLock {
+            var labels = [UInt64](repeating: 0, count: k)
+            var distances = [Float](repeating: 0, count: k)
+
+            let resultCount = processedQuery.withUnsafeBufferPointer { queryBuffer in
+                allowedLabels.words.withUnsafeBufferPointer { bitsetBuffer in
+                    labels.withUnsafeMutableBufferPointer { labelsBuffer in
+                        distances.withUnsafeMutableBufferPointer { distancesBuffer in
+                            Scalar.searchKnnWithAllowedLabels(
+                                index,
+                                query: queryBuffer.baseAddress!,
+                                k: Int32(k),
+                                ef: Int32(efSearch),
+                                allowedLabelWords: bitsetBuffer.baseAddress!,
+                                allowedLabelWordCount: bitsetBuffer.count,
+                                allowedLabelCount: allowedLabels.capacity,
+                                labels: labelsBuffer.baseAddress!,
+                                distances: distancesBuffer.baseAddress!
+                            )
+                        }
+                    }
+                }
+            }
+
+            return (0..<Int(resultCount)).map { i in
+                SearchResult(label: labels[i], distance: distances[i])
+            }
+        }
+    }
+
     /// Mark an element as deleted
     /// - Parameter label: The label of the element to delete
     public func markDeleted(label: UInt64) throws {

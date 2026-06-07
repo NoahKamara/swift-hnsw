@@ -39,6 +39,57 @@ void ParallelFor(size_t start, size_t end, size_t num_threads, Func&& func) {
     }
 }
 
+class AllowedBitsetFilterFunctor : public BaseFilterFunctor {
+    const uint64_t* allowed_words;
+    size_t allowed_word_count;
+    size_t allowed_label_count;
+
+public:
+    AllowedBitsetFilterFunctor(
+        const uint64_t* words,
+        size_t word_count,
+        size_t label_count)
+        : allowed_words(words),
+          allowed_word_count(word_count),
+          allowed_label_count(label_count) {}
+
+    bool operator()(labeltype id) override {
+        if (allowed_words == nullptr || id >= allowed_label_count) {
+            return false;
+        }
+        const size_t word_index = id >> 6;
+        if (word_index >= allowed_word_count) {
+            return false;
+        }
+        return (allowed_words[word_index] & (uint64_t{1} << (id & 63))) != 0;
+    }
+};
+
+template <typename DistType, typename QueryType>
+int32_t writeSearchKnnResult(
+    HierarchicalNSW<DistType>* idx,
+    const QueryType* query,
+    int32_t k,
+    int32_t ef,
+    BaseFilterFunctor* filter,
+    uint64_t* labels,
+    float* distances) {
+    auto result = idx->searchKnn(
+        query, static_cast<size_t>(k), static_cast<size_t>(ef), filter);
+
+    const int32_t resultCount = static_cast<int32_t>(result.size());
+    int32_t writeIdx = resultCount - 1;
+    while (!result.empty() && writeIdx >= 0) {
+        auto& top = result.top();
+        labels[writeIdx] = static_cast<uint64_t>(top.second);
+        distances[writeIdx] = top.first;
+        result.pop();
+        writeIdx--;
+    }
+
+    return resultCount;
+}
+
 int32_t resolveThreadCount(int32_t num_threads, int32_t count) {
     int32_t thread_count = num_threads;
     if (thread_count <= 0) {
@@ -168,18 +219,33 @@ int32_t hnsw_search_knn(
     if (!index || !query || !labels || !distances) return 0;
     try {
         auto* idx = static_cast<HierarchicalNSW<float>*>(index);
-        auto result = idx->searchKnn(query, static_cast<size_t>(k), static_cast<size_t>(ef));
+        return writeSearchKnnResult(idx, query, k, ef, nullptr, labels, distances);
+    } catch (...) {
+        return 0;
+    }
+}
 
-        int32_t writeIdx = k - 1;
-        while (!result.empty() && writeIdx >= 0) {
-            auto& top = result.top();
-            labels[writeIdx] = static_cast<uint64_t>(top.second);
-            distances[writeIdx] = top.first;
-            result.pop();
-            writeIdx--;
-        }
-
-        return k - writeIdx - 1;
+int32_t hnsw_search_knn_with_allowed_bitset(
+    HNSWIndexHandle index,
+    const float* query,
+    int32_t k,
+    int32_t ef,
+    const uint64_t* allowed_label_words,
+    size_t allowed_label_word_count,
+    size_t allowed_label_count,
+    uint64_t* labels,
+    float* distances
+) {
+    if (!index || !query || !labels || !distances || !allowed_label_words || allowed_label_word_count == 0) {
+        return 0;
+    }
+    try {
+        auto* idx = static_cast<HierarchicalNSW<float>*>(index);
+        AllowedBitsetFilterFunctor filter(
+            allowed_label_words,
+            allowed_label_word_count,
+            allowed_label_count);
+        return writeSearchKnnResult(idx, query, k, ef, &filter, labels, distances);
     } catch (...) {
         return 0;
     }
@@ -657,18 +723,33 @@ int32_t hnsw_search_knn_f16(
     if (!index || !query || !labels || !distances) return 0;
     try {
         auto* idx = static_cast<HierarchicalNSW<float>*>(index);
-        auto result = idx->searchKnn(query, static_cast<size_t>(k), static_cast<size_t>(ef));
+        return writeSearchKnnResult(idx, query, k, ef, nullptr, labels, distances);
+    } catch (...) {
+        return 0;
+    }
+}
 
-        int32_t writeIdx = k - 1;
-        while (!result.empty() && writeIdx >= 0) {
-            auto& top = result.top();
-            labels[writeIdx] = static_cast<uint64_t>(top.second);
-            distances[writeIdx] = top.first;
-            result.pop();
-            writeIdx--;
-        }
-
-        return k - writeIdx - 1;
+int32_t hnsw_search_knn_with_allowed_bitset_f16(
+    HNSWIndexHandle index,
+    const uint16_t* query,
+    int32_t k,
+    int32_t ef,
+    const uint64_t* allowed_label_words,
+    size_t allowed_label_word_count,
+    size_t allowed_label_count,
+    uint64_t* labels,
+    float* distances
+) {
+    if (!index || !query || !labels || !distances || !allowed_label_words || allowed_label_word_count == 0) {
+        return 0;
+    }
+    try {
+        auto* idx = static_cast<HierarchicalNSW<float>*>(index);
+        AllowedBitsetFilterFunctor filter(
+            allowed_label_words,
+            allowed_label_word_count,
+            allowed_label_count);
+        return writeSearchKnnResult(idx, query, k, ef, &filter, labels, distances);
     } catch (...) {
         return 0;
     }

@@ -41,6 +41,20 @@ int32_t hnsw_search_knn(
     float* distances
 );
 
+/// Filtered k-NN search using allowed-label membership bits evaluated in C++ during graph search.
+/// allowed_label_words stores one bit per external label; allowed_label_count is the number of labels represented.
+int32_t hnsw_search_knn_with_allowed_bitset(
+    HNSWIndexHandle index,
+    const float* query,
+    int32_t k,
+    int32_t ef,
+    const uint64_t* allowed_label_words,
+    size_t allowed_label_word_count,
+    size_t allowed_label_count,
+    uint64_t* labels,
+    float* distances
+);
+
 // Batch operations for high performance
 int32_t hnsw_add_points_batch(
     HNSWIndexHandle index,
@@ -133,6 +147,18 @@ int32_t hnsw_search_knn_f16(
     const uint16_t* query,
     int32_t k,
     int32_t ef,
+    uint64_t* labels,
+    float* distances
+);
+
+int32_t hnsw_search_knn_with_allowed_bitset_f16(
+    HNSWIndexHandle index,
+    const uint16_t* query,
+    int32_t k,
+    int32_t ef,
+    const uint64_t* allowed_label_words,
+    size_t allowed_label_word_count,
+    size_t allowed_label_count,
     uint64_t* labels,
     float* distances
 );

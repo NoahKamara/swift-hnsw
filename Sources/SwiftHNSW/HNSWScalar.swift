@@ -27,6 +27,19 @@ public protocol HNSWScalar: BinaryFloatingPoint, Sendable {
         distances: UnsafeMutablePointer<Float>
     ) -> Int32
 
+    /// Filtered k-NN search using an allowed-label bitset evaluated in C++.
+    static func searchKnnWithAllowedLabels(
+        _ index: HNSWIndexHandle,
+        query: UnsafePointer<Self>,
+        k: Int32,
+        ef: Int32,
+        allowedLabelWords: UnsafePointer<UInt64>,
+        allowedLabelWordCount: Int,
+        allowedLabelCount: Int,
+        labels: UnsafeMutablePointer<UInt64>,
+        distances: UnsafeMutablePointer<Float>
+    ) -> Int32
+
     /// Add points in batch
     static func addPointsBatch(
         _ index: HNSWIndexHandle,
@@ -87,6 +100,30 @@ extension Float: HNSWScalar {
         distances: UnsafeMutablePointer<Float>
     ) -> Int32 {
         hnsw_search_knn(index, query, k, ef, labels, distances)
+    }
+
+    public static func searchKnnWithAllowedLabels(
+        _ index: HNSWIndexHandle,
+        query: UnsafePointer<Float>,
+        k: Int32,
+        ef: Int32,
+        allowedLabelWords: UnsafePointer<UInt64>,
+        allowedLabelWordCount: Int,
+        allowedLabelCount: Int,
+        labels: UnsafeMutablePointer<UInt64>,
+        distances: UnsafeMutablePointer<Float>
+    ) -> Int32 {
+        hnsw_search_knn_with_allowed_bitset(
+            index,
+            query,
+            k,
+            ef,
+            allowedLabelWords,
+            allowedLabelWordCount,
+            allowedLabelCount,
+            labels,
+            distances
+        )
     }
 
     public static func addPointsBatch(
@@ -155,6 +192,32 @@ extension Float16: HNSWScalar {
     ) -> Int32 {
         query.withMemoryRebound(to: UInt16.self, capacity: 1) { ptr in
             hnsw_search_knn_f16(index, ptr, k, ef, labels, distances)
+        }
+    }
+
+    public static func searchKnnWithAllowedLabels(
+        _ index: HNSWIndexHandle,
+        query: UnsafePointer<Float16>,
+        k: Int32,
+        ef: Int32,
+        allowedLabelWords: UnsafePointer<UInt64>,
+        allowedLabelWordCount: Int,
+        allowedLabelCount: Int,
+        labels: UnsafeMutablePointer<UInt64>,
+        distances: UnsafeMutablePointer<Float>
+    ) -> Int32 {
+        query.withMemoryRebound(to: UInt16.self, capacity: 1) { ptr in
+            hnsw_search_knn_with_allowed_bitset_f16(
+                index,
+                ptr,
+                k,
+                ef,
+                allowedLabelWords,
+                allowedLabelWordCount,
+                allowedLabelCount,
+                labels,
+                distances
+            )
         }
     }
 
